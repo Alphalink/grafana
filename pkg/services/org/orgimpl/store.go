@@ -324,6 +324,7 @@ func (ss *sqlStore) Search(ctx context.Context, query *org.SearchOrgsQuery) ([]*
 // CreateWithMember creates an organization with a certain name and a certain user as member.
 func (ss *sqlStore) CreateWithMember(ctx context.Context, cmd *org.CreateOrgCommand) (*org.Org, error) {
 	orga := org.Org{
+		ID: cmd.ID,
 		Name:    cmd.Name,
 		Created: time.Now(),
 		Updated: time.Now(),
