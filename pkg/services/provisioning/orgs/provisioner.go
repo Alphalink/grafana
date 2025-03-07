@@ -47,10 +47,6 @@ func (dc *OrgProvisioner) applyChanges(ctx context.Context, configPath string) e
 }
 
 func (dc *OrgProvisioner) provisionOrgs(ctx context.Context, cfg *configs) error {
-	if err := dc.deleteOrgs(ctx, cfg); err != nil {
-		return err
-	}
-
 	for _, o := range cfg.Orgs {
 		cmd := &org.GetOrgByIDQuery{ID: o.ID}
 		_, err := dc.orgService.GetByID(ctx, cmd)
@@ -77,18 +73,6 @@ func (dc *OrgProvisioner) provisionOrgs(ctx context.Context, cfg *configs) error
 				return err
 			}
 		}
-	}
-
-	return nil
-}
-
-func (dc *OrgProvisioner) deleteOrgs(ctx context.Context, cfg *configs) error {
-	for _, o := range cfg.DeleteOrgs {
-		cmd := &org.DeleteOrgCommand{ID: o.ID}
-		if err := dc.orgService.Delete(ctx, cmd); err != nil {
-			return err
-		}
-
 	}
 
 	return nil
