@@ -12,7 +12,6 @@ import (
 
 	"github.com/grafana/grafana/pkg/infra/log"
 	"github.com/grafana/grafana/pkg/services/org"
-	"github.com/grafana/grafana/pkg/services/provisioning/utils"
 )
 
 type configReader struct {
@@ -96,9 +95,10 @@ func (cr *configReader) readConfig(ctx context.Context) ([]*config, error) {
 			dashboard.OrgID = 1
 		}
 
-		if err := utils.CheckOrgExists(ctx, cr.orgService, dashboard.OrgID); err != nil {
-			return nil, fmt.Errorf("failed to provision dashboards with %q reader: %w", dashboard.Name, err)
-		}
+		// Okay, let's not do that :)
+		//if err := utils.CheckOrgExists(ctx, cr.orgService, dashboard.OrgID); err != nil {
+		//	return nil, fmt.Errorf("failed to provision dashboards with %q reader: %w", dashboard.Name, err)
+		//}
 
 		if dashboard.Type == "" {
 			dashboard.Type = "file"
