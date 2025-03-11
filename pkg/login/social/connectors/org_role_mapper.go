@@ -16,6 +16,7 @@ import (
 )
 
 const (
+	mapperMatchExternalOrg = -2
 	mapperMatchAllOrgID = -1
 	escapeStr           = `\`
 )
@@ -69,7 +70,7 @@ func (m *OrgRoleMapper) MapOrgRoles(
 		return m.getDefaultOrgMapping(mappingCfg.strictRoleMapping, directlyMappedRole)
 	}
 
-	userOrgRoles := getMappedOrgRoles(externalOrgs, mappingCfg.orgMapping)
+	userOrgRoles := m.getMappedOrgRoles(externalOrgs, mappingCfg.orgMapping)
 
 	if err := m.handleGlobalOrgMapping(userOrgRoles); err != nil {
 		// Cannot map global org roles, return nil (prevent resetting asignments)
@@ -238,6 +239,10 @@ func (m *OrgRoleMapper) getOrgIDForInternalMapping(ctx context.Context, orgIdCfg
 		return mapperMatchAllOrgID, nil
 	}
 
+	if orgIdCfg == "?" {
+		return mapperMatchExternalOrg, nil
+	}
+
 	if orgIdCfg == "" {
 		return 0, fmt.Errorf("the org name or id is empty")
 	}
@@ -306,7 +311,7 @@ func isValidOrgMappingFormat(kv []string) bool {
 	return len(kv) > 1 && len(kv) < 4
 }
 
-func getMappedOrgRoles(externalOrgs []string, orgMapping map[string]map[int64]org.RoleType) map[int64]org.RoleType {
+func (m *OrgRoleMapper) getMappedOrgRoles(externalOrgs []string, orgMapping map[string]map[int64]org.RoleType) map[int64]org.RoleType {
 	userOrgRoles := map[int64]org.RoleType{}
 
 	if len(orgMapping) == 0 {
@@ -319,13 +324,20 @@ func getMappedOrgRoles(externalOrgs []string, orgMapping map[string]map[int64]or
 		}
 	}
 
-	for _, org := range externalOrgs {
-		orgRoles, ok := orgMapping[org]
+	for _, orgName := range externalOrgs {
+		orgRoles, ok := orgMapping[orgName]
 		if !ok {
 			continue
 		}
 
 		for orgID, role := range orgRoles {
+			if orgID == mapperMatchExternalOrg {
+				res, err := m.orgService.GetByName(context.Background(), &org.GetOrgByNameQuery{Name: orgName})
+				if err != nil {
+					userOrgRoles[res.ID] = role
+				}
+				continue
+			}
 			userOrgRoles[orgID] = getTopRole(userOrgRoles[orgID], role)
 		}
 	}
