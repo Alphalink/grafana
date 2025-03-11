@@ -3,6 +3,8 @@ package connectors
 import (
 	"context"
 	"fmt"
+	"maps"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -10,6 +12,7 @@ import (
 	"github.com/grafana/grafana/pkg/infra/log"
 	"github.com/grafana/grafana/pkg/services/org"
 	"github.com/grafana/grafana/pkg/setting"
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -135,6 +138,51 @@ func (m *OrgRoleMapper) handleGlobalOrgMapping(orgRoles map[int64]org.RoleType) 
 	return nil
 }
 
+type ChunkOrgMapping struct {
+	External   string		`yaml:"source"`
+	Internal   string		`yaml:"destination"`
+	Role       string		`yaml:"role"`
+}
+
+func (m *OrgRoleMapper) ParseOrgMappingPathSettings(ctx context.Context, path string) map[string]map[int64]org.RoleType {
+	res := map[string]map[int64]org.RoleType{}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		m.logger.Error("Could not read org mapping yaml file: ", path, err)
+		return nil
+	}
+
+	var lines []ChunkOrgMapping
+	err = yaml.Unmarshal(data, &lines)
+
+	if err != nil {
+		m.logger.Error("Could not read org mapping yaml file: ", path, err)
+		return nil
+	}
+
+	for _, cfg := range lines {
+		orgID, err := m.getOrgIDForInternalMapping(ctx, cfg.Internal)
+		if err != nil {
+			m.logger.Error("Invalid organization ", cfg.Internal, ": ", err)
+			return nil
+		}
+
+		if res[cfg.External] == nil {
+			res[cfg.External] = map[int64]org.RoleType{}
+		}
+
+		role := org.RoleViewer
+		if org.RoleType(cfg.Role).IsValid() {
+			role = org.RoleType(cfg.Role)
+		} else {
+			m.logger.Error("Invalid rolename ", cfg.Role, " in ", path)
+		}
+
+		res[cfg.External][int64(orgID)] = role
+	}
+	return res
+}
+
 // ParseOrgMappingSettings parses the `org_mapping` setting and returns an internal representation of the mapping.
 // If the roleStrict is enabled, the mapping should contain a valid role for each org.
 // FIXME: Consider introducing a struct to represent the org mapping settings
@@ -142,6 +190,12 @@ func (m *OrgRoleMapper) ParseOrgMappingSettings(ctx context.Context, mappings []
 	res := map[string]map[int64]org.RoleType{}
 
 	for _, v := range mappings {
+		if strings.HasPrefix(v, "path:") {
+			src := m.ParseOrgMappingPathSettings(ctx, strings.TrimPrefix(v, "path:"))
+			maps.Copy(res, src)
+			continue
+		}
+
 		kv := splitOrgMapping(v)
 		if !isValidOrgMappingFormat(kv) {
 			m.logger.Error("Skipping org mapping due to invalid format.", "mapping", fmt.Sprintf("%v", v))
